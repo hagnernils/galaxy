@@ -1,0 +1,14 @@
+gravity:
+  gx_it_proxy:
+    enable: true
+    port: 4002
+
+galaxy:
+  tool_config_file: tool_conf.xml.sample
+  job_config_file: job_conf.escriptorium.yml
+  interactivetools_enable: true
+  interactivetools_map: database/interactivetools_map.sqlite
+  outputs_to_working_directory: true
+  galaxy_infrastructure_url: http://localhost:8080
+  interactivetools_upstream_proxy: false
+  interactivetools_proxy_host: localhost:4002
