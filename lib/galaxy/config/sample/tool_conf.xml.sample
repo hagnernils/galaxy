@@ -152,6 +152,9 @@
     <tool file="phenotype_association/ldtools.xml" />
     <tool file="phenotype_association/master2pg.xml" />
   </section>
+  <section id="interactive_tools" name="Interactive Tools">
+    <tool file="interactive/escriptorium/interactivetool_escriptorium.xml" />
+  </section>
   <!--
   <section id="interactivetools" name="Interactive tools">
     <tool file="interactive/interactivetool_askomics.xml" />
