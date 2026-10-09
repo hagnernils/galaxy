@@ -1,0 +1,102 @@
+<tool id="local_interactivetool_escriptorium" name="eScriptorium" tool_type="interactive" version="26.04.1+galaxy.0" profile="24.2" require_login="true">
+    <description>segment, transcribe, and train models on selected images, PDFs, and annotations</description>
+    <requirements>
+        <container type="docker">localhost/escriptorium:26.04.1-cpu</container>
+    </requirements>
+    <entry_points>
+        <entry_point name="eScriptorium" requires_domain="True">
+            <port>80</port>
+            <url>/galaxy/login/</url>
+        </entry_point>
+    </entry_points>
+    <environment_variables>
+        <environment_variable name="GALAXY_INTERACTIVE">true</environment_variable>
+        <environment_variable name="GALAXY_USER_ID">$__user_id__</environment_variable>
+        <environment_variable name="GALAXY_USER_EMAIL">$__user_email__</environment_variable>
+        <environment_variable name="GALAXY_HISTORY_ID">$__history_id__</environment_variable>
+        <environment_variable name="GALAXY_COOKIE_SECURE">${str($__galaxy_url__).startswith('https://')}</environment_variable>
+    </environment_variables>
+    <command detect_errors="exit_code"><![CDATA[
+#import shlex
+set -eu &&
+mkdir -p escriptorium-session/imports && rm -f escriptorium-session/imports/manifest.jsonl &&
+#for $index, $image in enumerate($source.images):
+#set $image_name = $image.unsanitized.name if str($source.kind) == 'datasets' else $image.element_identifier
+python '$__tool_directory__/stage_input.py' --manifest escriptorium-session/imports/manifest.jsonl --source ${shlex.quote(str($image))} --name=${shlex.quote(str($image_name))} --extension ${shlex.quote(str($image.ext))} --source-kind '$source.kind' --category ${shlex.quote(str($source.category))} --index '$index' &&
+#end for
+#for $index, $annotation in enumerate($annotations)
+python '$__tool_directory__/stage_input.py' --manifest escriptorium-session/imports/manifest.jsonl --source ${shlex.quote(str($annotation))} --name=${shlex.quote(str($annotation.element_identifier if hasattr($annotation, 'element_identifier') else $annotation.unsanitized.name))} --extension ${shlex.quote(str($annotation.ext))} --source-kind 'datasets' --category ${shlex.quote('annotation-archive' if str($annotation.ext) == 'zip' else 'annotation')} --index '$index' &&
+#end for
+#for $index, $model in enumerate($segmentation_models)
+python '$__tool_directory__/stage_input.py' --manifest escriptorium-session/imports/manifest.jsonl --source ${shlex.quote(str($model))} --name=${shlex.quote(str($model.unsanitized.name))} --extension ${shlex.quote(str($model.ext))} --source-kind 'datasets' --category 'model' --model-job 'segment' --index '$index' &&
+#end for
+#for $index, $model in enumerate($recognition_models)
+python '$__tool_directory__/stage_input.py' --manifest escriptorium-session/imports/manifest.jsonl --source ${shlex.quote(str($model))} --name=${shlex.quote(str($model.unsanitized.name))} --extension ${shlex.quote(str($model.ext))} --source-kind 'datasets' --category 'model' --model-job 'recognize' --index '$index' &&
+#end for
+exec bash '$__tool_directory__/start-escriptorium.sh' "\$(pwd)/escriptorium-session" ${shlex.quote(str($project_name))} ${shlex.quote(str($document_name))} '$session_report' '$session_logs' '$page_xml_out' '$alto_xml_out' '$text_out' '$models_out'
+    ]]></command>
+    <inputs>
+        <conditional name="source">
+            <param name="kind" type="select" label="Image/PDF source">
+                <option value="datasets">Selected datasets</option>
+                <option value="collection">Ordered list collection</option>
+            </param>
+            <when value="datasets">
+                <param name="images" type="data" multiple="true" format="png,jpg,jpeg,tiff,pdf" label="Images or PDFs" />
+                <param name="category" type="hidden" value="image" />
+            </when>
+            <when value="collection">
+                <param name="images" type="data_collection" collection_type="list" format="png,jpg,jpeg,tiff,pdf" label="Ordered images or PDFs" />
+                <param name="category" type="hidden" value="image" />
+            </when>
+        </conditional>
+        <param name="annotations" type="data" multiple="true" optional="true" format="xml,zip"
+               label="PAGE/ALTO annotation files or annotation archives (optional)"
+               help="XML files are matched to an input image/page by matching base filename; zip archives are expanded during import." />
+        <param name="segmentation_models" type="data" multiple="true" optional="true" format="data"
+               label="Segmentation models to import (optional)"
+               help="Kraken .mlmodel or .safetensors files. Declared here so the correct job type (segmentation) is recorded; see annotations help for pairing." />
+        <param name="recognition_models" type="data" multiple="true" optional="true" format="data"
+               label="Recognition models to import (optional)"
+               help="Kraken .mlmodel or .safetensors files used for text recognition/training." />
+        <param name="project_name" type="text" value="Galaxy import" label="Project name">
+            <sanitizer sanitize="false" />
+            <validator type="length" min="1" max="512" />
+        </param>
+        <param name="document_name" type="text" value="Imported images" label="Document name">
+            <sanitizer sanitize="false" />
+            <validator type="length" min="1" max="512" />
+        </param>
+    </inputs>
+    <outputs>
+        <data name="session_report" format="json" label="eScriptorium session report" />
+        <data name="session_logs" format="tar.gz" label="eScriptorium session logs" />
+        <data name="page_xml_out" format="zip" label="eScriptorium PAGE XML" />
+        <data name="alto_xml_out" format="zip" label="eScriptorium ALTO XML" />
+        <data name="text_out" format="zip" label="eScriptorium plain text" />
+        <data name="models_out" format="zip" label="eScriptorium trained/updated models" />
+    </outputs>
+    <tests />
+    <help><![CDATA[
+Select PNG/JPEG/TIFF images or PDFs (as datasets or an ordered list collection),
+optionally PAGE/ALTO annotation files or annotation archives, and optionally
+Kraken ``.mlmodel``/``.safetensors`` segmentation and recognition models. The
+tool creates one project and document, imports the selection in supplied
+order, matches annotation files to pages by base filename, loads imported
+models for immediate use, and opens the regular-user session through Galaxy.
+
+Annotations and models are optional; omit them for a minimal images/PDFs-only
+workflow.
+
+Work during the session uses the application's normal editing, segmentation,
+recognition, and training interface; manual exports keep their usual
+selection. On normal Galaxy Stop the tool additionally exports the latest
+saved PAGE XML, ALTO XML, and plain text for every document/transcription
+version, plus any models trained or updated during the session, into the
+declared history outputs. Export failures are recorded in the job log rather
+than aborting the stop.
+
+See ``galaxy/README.md`` in the source repository for integration notes and
+known limitations.
+    ]]></help>
+</tool>

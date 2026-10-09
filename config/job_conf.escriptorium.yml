@@ -12,6 +12,9 @@ execution:
     docker_local:
       runner: local
       local_slots: 4
+      env:
+        - name: CONTAINERS_STORAGE_CONF
+          value: "/home/nils-hagner/Documents/repos/galaxy/config/containers-storage.escriptorium.conf"
       docker_enabled: true
       docker_cmd: podman
       docker_sudo: false
