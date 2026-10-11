@@ -21,6 +21,9 @@ execution:
       require_container: true
       container_monitor: true
       container_monitor_result: file
+      env:
+        - name: CONTAINERS_STORAGE_CONF
+          value: /home/nils-hagner/Documents/repos/galaxy/config/containers-storage.escriptorium.conf
 
     docker_dispatch:
       runner: dynamic
